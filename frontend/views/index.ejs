@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Flashcards</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        margin: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+      }
+      .container {
+        display: flex;
+        align-items: center;
+      }
+      .nav-btn {
+        font-size: 24px;
+        padding: 20px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        color: black;
+      }
+      .nav-btn.disabled {
+        color: #ccc;
+        cursor: not-allowed;
+      }
+      .card {
+        border: 1px solid #ccc;
+        padding: 20px;
+        margin: 0 20px;
+        width: 400px;
+        min-height: 400px; /* prevent jumping */
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        text-align: left;
+      }
+      details {
+        margin: 8px 0;
+      }
+      details summary {
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .actions {
+        margin-top: 20px;
+        text-align: center;
+      }
+      .actions button {
+        margin: 5px;
+        padding: 10px 20px;
+        cursor: pointer;
+      }
+      .progress {
+        text-align: center;
+        margin-bottom: 10px;
+        font-size: 14px;
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <button
+        class="nav-btn <%= index === 0 ? 'disabled' : '' %>"
+        onclick="navigate('left')"
+        id="leftBtn"
+      >
+        ⬅️
+      </button>
+
+      <div class="card" id="card">
+        <div class="progress" id="progress">
+          Card <%= index + 1 %> of <%= total %>
+        </div>
+
+        <% if (card) { %>
+        <h2><%= card.word %></h2>
+
+        <details open>
+          <summary>Definition</summary>
+          <p><%= card.definition %></p>
+        </details>
+
+        <details>
+          <summary>Usage</summary>
+          <p><%= card.recent_usage %></p>
+        </details>
+
+        <details>
+          <summary>Etymology</summary>
+          <p><%= card.etymology %></p>
+        </details>
+
+        <details>
+          <summary>Synonyms</summary>
+          <ul>
+            <% JSON.parse(card.synonyms || "[]").forEach(s => { %>
+              <li><%= s %></li>
+            <% }) %>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Antonyms</summary>
+          <ul>
+            <% JSON.parse(card.antonyms || "[]").forEach(a => { %>
+              <li><%= a %></li>
+            <% }) %>
+          </ul>
+        </details>
+
+        <% } else { %>
+        <p>No card available</p>
+        <% } %>
+      </div>
+
+      <button
+        class="nav-btn <%= index === total - 1 ? 'disabled' : '' %>"
+        onclick="navigate('right')"
+        id="rightBtn"
+      >
+        ➡️
+      </button>
+    </div>
+
+    <div class="actions">
+      <button onclick="sendAction('easy')">Easy</button>
+      <button onclick="sendAction('medium')">Medium</button>
+      <button onclick="sendAction('hard')">Hard</button>
+    </div>
+
+    <div class="actions">
+      <button onclick="resetSession()">Reset Session</button>
+    </div>
+
+    <script>
+      function updateCard(card, index, total) {
+        const cardDiv = document.getElementById("card");
+        const leftBtn = document.getElementById("leftBtn");
+        const rightBtn = document.getElementById("rightBtn");
+
+        if (!card) {
+          cardDiv.innerHTML = "<p>No card available</p>";
+          return;
+        }
+
+        cardDiv.innerHTML = `
+          <div class="progress">Card ${index + 1} of ${total}</div>
+          <h2>${card.word}</h2>
+
+          <details open>
+            <summary>Definition</summary>
+            <p>${card.definition}</p>
+          </details>
+
+          <details>
+            <summary>Usage</summary>
+            <p>${card.recent_usage}</p>
+          </details>
+
+          <details>
+            <summary>Etymology</summary>
+            <p>${card.etymology}</p>
+          </details>
+
+          <details>
+            <summary>Synonyms</summary>
+            <ul>
+              ${(JSON.parse(card.synonyms || "[]"))
+                .map((s) => `<li>${s}</li>`)
+                .join("")}
+            </ul>
+          </details>
+
+          <details>
+            <summary>Antonyms</summary>
+            <ul>
+              ${(JSON.parse(card.antonyms || "[]"))
+                .map((a) => `<li>${a}</li>`)
+                .join("")}
+            </ul>
+          </details>
+        `;
+
+        // Update nav button states
+        if (index === 0) {
+          leftBtn.classList.add("disabled");
+        } else {
+          leftBtn.classList.remove("disabled");
+        }
+
+        if (index === total - 1) {
+          rightBtn.classList.add("disabled");
+        } else {
+          rightBtn.classList.remove("disabled");
+        }
+      }
+
+      async function navigate(direction) {
+        const res = await fetch("/navigate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ direction }),
+        });
+        const data = await res.json();
+        updateCard(data.card, data.index, data.total);
+      }
+
+      async function sendAction(action) {
+        const res = await fetch("/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json();
+        updateCard(data.card, data.index, data.total);
+      }
+
+      async function resetSession() {
+        const res = await fetch("/reset", { method: "POST" });
+        const data = await res.json();
+        updateCard(data.card, data.index, data.total);
+      }
+    </script>
+  </body>
+</html>

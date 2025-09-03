@@ -3,8 +3,9 @@ import json
 import zipfile
 import os
 import sys
-from pathlib import Path
 import re
+import html
+from pathlib import Path
 
 # Gemini API (grounded)
 from google import genai
@@ -22,6 +23,17 @@ if not API_KEY:
 
 # Configure Gemini client
 client = genai.Client(http_options=HttpOptions(api_version="v1alpha"))
+
+
+def clean_field_value(value: str) -> str:
+    """Clean Anki field value: remove HTML tags, decode entities, strip spaces."""
+    # Decode HTML entities (&nbsp;, &amp;, etc.)
+    value = html.unescape(value)
+    # Remove HTML tags like <br>, <div>, etc.
+    value = re.sub(r"<[^>]+>", " ", value)
+    # Collapse multiple spaces
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
 
 
 def extract_sort_field_words(apkg_path):
@@ -58,7 +70,8 @@ def extract_sort_field_words(apkg_path):
         sort_field_index = model_info[mid]
         field_values = flds.split("\x1f")
         if 0 <= sort_field_index < len(field_values):
-            word = field_values[sort_field_index].strip()
+            raw_word = field_values[sort_field_index]
+            word = clean_field_value(raw_word)
             if word:
                 words.append(word)
 
@@ -69,7 +82,6 @@ def extract_sort_field_words(apkg_path):
 
 def clean_json_response(text: str) -> str:
     """Remove ```json fences and return clean JSON string."""
-    # Remove markdown fences like ```json ... ```
     cleaned = re.sub(r"^```json\s*|\s*```$", "", text.strip(), flags=re.DOTALL | re.MULTILINE)
     return cleaned.strip()
 
@@ -106,7 +118,7 @@ def main(apkg_path, output_folder="output"):
     print(f"Found {len(words)} words in deck.")
 
     for word in words:
-        safe_word = word.replace(" ", "_").replace("/", "_")
+        safe_word = re.sub(r"[^a-zA-Z0-9_-]+", "_", word)  # safe filename
         out_path = Path(output_folder) / f"{safe_word}.json"
 
         if out_path.exists():
