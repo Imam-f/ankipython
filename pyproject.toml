@@ -1,0 +1,10 @@
+[project]
+name = "ankipython"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "google-genai>=1.32.0",
+    "google-generativeai>=0.8.5",
+]
