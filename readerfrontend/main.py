@@ -19,6 +19,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS words (
             word TEXT PRIMARY KEY,
             definition TEXT,
+            recent_usage TEXT,
+            etymology TEXT,
+            synonyms TEXT,
+            antonyms TEXT,
             frequency INTEGER,
             read_count INTEGER DEFAULT 0
         )
@@ -38,12 +42,31 @@ def load_words_from_folder():
         with open(path, "r", encoding="utf-8") as f:
             try:
                 data = json.load(f)
+
                 word = data.get("word")
                 definition = data.get("definition", "")
-                freq = data.get("frequency", 0)
+                recent_usage = data.get("recent_usage", "")
+                etymology = data.get("etymology", "")
+                synonyms = ", ".join(data.get("synonyms", []))
+                antonyms = ", ".join(data.get("antonyms", []))
+                frequency = data.get("frequency", 0)
+
                 cur.execute(
-                    "INSERT OR IGNORE INTO words (word, definition, frequency) VALUES (?, ?, ?)",
-                    (word, definition, freq),
+                    """
+                    INSERT OR IGNORE INTO words
+                    (word, definition, recent_usage, etymology,
+                     synonyms, antonyms, frequency)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        word,
+                        definition,
+                        recent_usage,
+                        etymology,
+                        synonyms,
+                        antonyms,
+                        frequency,
+                    ),
                 )
             except Exception as e:
                 print(f"Failed to load {fn}: {e}")
@@ -57,7 +80,8 @@ def get_next_word():
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT word, definition, frequency, read_count
+        SELECT word, definition, recent_usage, etymology,
+               synonyms, antonyms, frequency, read_count
         FROM words
         ORDER BY read_count ASC, frequency DESC
         LIMIT 1
@@ -65,14 +89,19 @@ def get_next_word():
     )
     row = cur.fetchone()
     conn.close()
-    if row:
-        return {
-            "word": row[0],
-            "definition": row[1],
-            "frequency": row[2],
-            "count": row[3],
-        }
-    return None
+    if not row:
+        return None
+
+    return {
+        "word": row[0],
+        "definition": row[1],
+        "recent_usage": row[2],
+        "etymology": row[3],
+        "synonyms": row[4],
+        "antonyms": row[5],
+        "frequency": row[6],
+        "count": row[7],
+    }
 
 
 def increment_count(word):
@@ -100,28 +129,27 @@ def next_word():
 
 @app.route("/audio/<word>")
 def audio(word):
-    """Generate and stream TTS audio."""
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
-    cur.execute("SELECT definition FROM words WHERE word = ?", (word,))
+    cur.execute(
+        """SELECT definition, recent_usage FROM words WHERE word = ?""", (word,)
+    )
     row = cur.fetchone()
     conn.close()
 
     if not row:
         return jsonify({"error": "Word not found"}), 404
 
-    text = f"{word}. Definition: {row[0]}"
+    definition, usage = row
+    text = f"{word}. Definition: {definition}"
+    if usage:
+        text += f" Example: {usage}"
+
     tts = gTTS(text=text, lang="en")
     audio_fp = BytesIO()
     tts.write_to_fp(audio_fp)
     audio_fp.seek(0)
-
-    return send_file(
-        audio_fp,
-        mimetype="audio/mpeg",
-        as_attachment=False,
-        download_name=f"{word}.mp3",
-    )
+    return send_file(audio_fp, mimetype="audio/mpeg", as_attachment=False)
 
 
 if __name__ == "__main__":

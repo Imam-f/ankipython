@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>TTS Word Reader (Autoplay + Speed Fix)</title>
+    <title>TTS Word Reader (Full Info)</title>
     <style>
       body {
         font-family: sans-serif;
@@ -15,7 +15,6 @@
         font-size: 1em;
       }
       label {
-        font-weight: bold;
         display: inline-block;
         margin-top: 1em;
       }
@@ -37,10 +36,16 @@
       .controls {
         margin-bottom: 1em;
       }
+      .field {
+        margin-bottom: 0.5em;
+      }
+      .field span {
+        font-weight: bold;
+      }
     </style>
   </head>
   <body>
-    <h1>Word Reader</h1>
+    <h1>Word Reader (Full Info)</h1>
 
     <div class="controls">
       <button id="nextBtn">Next Word</button>
@@ -64,72 +69,80 @@
       <span id="speedLabel">1.0×</span>
     </label>
 
-    <pre id="output">Press “Next Word” to start.</pre>
+    <div id="info">
+      <pre>Press "Next Word" to start.</pre>
+    </div>
+
     <audio id="player" controls></audio>
 
     <script>
       const nextBtn = document.getElementById("nextBtn");
       const replayBtn = document.getElementById("replayBtn");
       const autoplayChk = document.getElementById("autoplayChk");
-      const output = document.getElementById("output");
-      const player = document.getElementById("player");
       const speedSlider = document.getElementById("speedSlider");
       const speedLabel = document.getElementById("speedLabel");
+      const infoDiv = document.getElementById("info");
+      const player = document.getElementById("player");
 
       let lastWord = null;
       let currentSpeed = parseFloat(speedSlider.value);
 
-      // --- HANDLE SPEED SLIDER ---
-
       speedSlider.addEventListener("input", () => {
         currentSpeed = parseFloat(speedSlider.value);
         speedLabel.textContent = `${currentSpeed.toFixed(1)}×`;
-        player.playbackRate = currentSpeed; // apply immediately
+        player.playbackRate = currentSpeed;
       });
 
-      // When new audio loads, ensure it keeps the current speed
       player.addEventListener("loadedmetadata", () => {
         player.playbackRate = currentSpeed;
       });
 
-      // --- HANDLE AUTOPLAY ---
       player.addEventListener("ended", () => {
         if (autoplayChk.checked) {
           fetchAndPlayNext();
         }
       });
 
-      // --- MAIN FUNCTION ---
       async function fetchAndPlayNext() {
-        output.textContent = "Fetching next word...";
-        try {
-          const res = await fetch("/next");
-          const data = await res.json();
-
-          if (data.error) {
-            output.textContent = data.error;
-            return;
-          }
-
-          lastWord = data.word;
-          output.textContent = `Word: ${data.word}
-Definition: ${data.definition}
-Frequency: ${data.frequency}
-Times Read (after this): ${data.count + 1}`;
-
-          player.src = `/audio/${encodeURIComponent(data.word)}`;
-
-          // Force reapply speed after src change
-          player.playbackRate = currentSpeed;
-
-          // Start playing automatically if autoplay is on
-          await player.play().catch(() => {});
-        } catch (err) {
-          output.textContent = `Error fetching next word: ${err}`;
+        infoDiv.innerHTML = "<pre>Loading next word...</pre>";
+        const res = await fetch("/next");
+        const data = await res.json();
+        if (data.error) {
+          infoDiv.innerHTML = `<pre>${data.error}</pre>`;
+          return;
         }
+
+        lastWord = data.word;
+
+        const html = `
+          <div class="field"><span>Word:</span> ${data.word}</div>
+          <div class="field"><span>Definition:</span> ${data.definition}</div>
+          <div class="field"><span>Recent Usage:</span> ${
+            data.recent_usage || "(none)"
+          }</div>
+          <div class="field"><span>Etymology:</span> ${
+            data.etymology || "(none)"
+          }</div>
+          <div class="field"><span>Synonyms:</span> ${
+            data.synonyms || "(none)"
+          }</div>
+          <div class="field"><span>Antonyms:</span> ${
+            data.antonyms || "(none)"
+          }</div>
+          <div class="field"><span>Frequency:</span> ${
+            data.frequency
+          }</div>
+          <div class="field"><span>Times Read (after this):</span> ${
+            data.count + 1
+          }</div>
+        `;
+        infoDiv.innerHTML = html;
+
+        player.src = `/audio/${encodeURIComponent(data.word)}`;
+        player.playbackRate = currentSpeed;
+        await player.play().catch(() => {});
       }
 
-      // --- BUTTONS ---
       nextBtn.addEventListener("click", fetchAndPlayNext);
 
       replayBtn.addEventListener("click", () => {
@@ -137,7 +150,7 @@ Times Read (after this): ${data.count + 1}`;
           player.currentTime = 0;
           player.play();
         } else {
-          output.textContent = "No word loaded yet.";
+          infoDiv.innerHTML = "<pre>No word loaded yet.</pre>";
         }
       });
     </script>
