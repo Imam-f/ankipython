@@ -14,3 +14,7 @@ output/
 
 output*
 *.apkg
+
+vocab_*
+
+*.db
